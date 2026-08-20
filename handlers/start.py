@@ -2,8 +2,34 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from services.language_service import get_message
+import httpx
+import re
 
 logger = logging.getLogger(__name__)
+
+async def get_track_info_scrape(track_id: str):
+    url = f"https://open.spotify.com/track/{track_id}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+
+    html = response.text
+
+    title_match = re.search(r'<meta property="og:title" content="([^"]+)"', html)
+    song_name = title_match.group(1) if title_match else None
+
+    desc_match = re.search(r'<meta property="og:description" content="([^"]+)"', html)
+    description = desc_match.group(1) if desc_match else None
+
+    artist_name = None
+    if description:
+        parts = description.split(" · ")
+        if len(parts) > 0:
+            artist_name = parts[0]
+
+    return [song_name, artist_name]
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -18,6 +44,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
          InlineKeyboardButton(guide_btn, callback_data="guide")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
+
+    track_payload = context.args[0] if context.args else None
+    if track_payload:
+        track_id = track_payload.split('_')[0]
+        logger.info("User: %s requested track_id: %s", user.id, track_id)
+        track = await get_track_info_scrape(track_id)
+        song_name, artist_name = track
+        context.args = song_name.split() + ["by"] + artist_name.split()
+        from handlers.search import accurate_search_handler
+        await accurate_search_handler(update, context)
+        return
 
     if update.callback_query:
         query = update.callback_query
