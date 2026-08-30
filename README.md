@@ -1,4 +1,4 @@
-#  Gaslight Lyricsor Bot
+# 💬 Gaslight Lyricsor Bot
 
 **Gaslight** is a Telegram bot that finds and returns song lyrics based on the song name you give it.
 
